@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>RayTracer</title>
+    <script type="module">
+        import { RayTracer } from "./RayTracer.js";
+        import { parseSceneYaml } from "./sceneParser.js";
+        import { vectorScaled } from "./Vector3.js";
+        
+        const sceneFiles = [
+            "scenes/pumpkin.yaml",
+            "scenes/simple-sheets.yaml",
+            "scenes/four-spheres.yaml",
+            "scenes/spheres-on-stage.yaml",
+            "scenes/two-boxes.yaml",
+            "scenes/paperweight.yaml"
+        ]
+        
+        async function renderFile(filename, canvas) {
+            /*
+            Load the given filename and render it on the given canvas.
+            */
+            const oldTitle = document.title;
+            document.title = "Rendering " + filename;
+            
+            const r = await fetch(filename);
+            const t = await r.text();
+            canvas.nextSibling.value = t;  
+            canvas.nextSibling.style.backgroundColor = 'rgb(255,255,255)';
+            const start = (new Date).getTime();
+            renderText(t, canvas);
+            const elapsed = (new Date).getTime() - start;
+            console.log(`Rendered ${filename} in ${elapsed/1000}s`);            
+            document.title = oldTitle;
+        }
+        
+        function renderText(t, canvas) {
+            /*
+            Render the scene described by the given text on the given canvas.
+            */
+            const sceneObject = parseSceneYaml(t);
+            console.log(sceneObject)
+            renderScene(sceneObject, canvas);
+        }
+        
+        function renderScene(sceneInfo, canvas) {
+            /*
+            Set up the canvas for the given scene.
+            Pass given sceneInfo (object) to renderer.
+            Then copy renderer's result onto given canvas.
+            */
+            canvas.width = sceneInfo.i_width; 
+            canvas.height = sceneInfo.i_height;  
+            const context = canvas.getContext('2d');
+            const image = context.createImageData(canvas.width, canvas.height);
+            const renderer = new RayTracer(sceneInfo, image);
+            renderer.render();
+            context.putImageData(image, 0, 0);
+        }        
+  
+
+        function createCanvasses() {
+            /*
+            Creates a canvas for every filename in the sceneFiles array.
+            Sets up buttons to render to the nearby (below) canvas.
+            Sets up sandbox <textarea> and clickable canvas to re-render.
+            Also adds "render all" button and keyboard shortcut "Home".
+            */
+
+            const buttons = [];
+            for (const file of sceneFiles) {
+                const header = document.createElement('p');
+                
+                // create button
+                const renderButton = document.createElement('button');
+                renderButton.innerHTML = 'Render';
+                header.appendChild(renderButton);
+                buttons.push(renderButton);
+                
+                // create filename box
+                const inputBox = document.createElement('input');
+                inputBox.setAttribute('value', file);
+                header.appendChild(inputBox);
+
+                // append them
+                document.body.appendChild(header);
+                
+                // create canvas
+                const canvas = document.createElement('canvas');
+                canvas.style.border = '1px solid black';
+                canvas.style.imageRendering = 'pixelated';
+                // always render canvas to 200 CSS pixels, regardless of underlying pixels                
+                canvas.style.width = '400px';
+                canvas.width = 100;
+                canvas.height = 100;
+                canvas.style.verticalAlign = 'middle';
+                
+                // append canvas
+                document.body.appendChild(canvas);
+                                
+                // create sandbox
+                const sandbox = document.createElement('textarea');
+                sandbox.style.width = '300px';
+                sandbox.style.height = '300px';
+                sandbox.style.fontSize = '8px';
+                sandbox.style.verticalAlign = 'middle';
+                sandbox.style.marginLeft = '10px';
+                sandbox.setAttribute("spellcheck","false");
+                
+                // append sandbox
+                document.body.appendChild(sandbox);
+                
+                // hang event on render buttons
+                // use async-await so when we renderAll they happen in series
+                renderButton.onclick = async function() {
+                    await renderFile(inputBox.value, canvas);
+                }
+
+                canvas.onclick = function() {
+                    try {
+                        const start = (new Date).getTime();
+                        const oldTitle = document.title;
+                        document.title = "Rendering sandbox..."
+                        renderText(sandbox.value, canvas);
+                        const elapsed = (new Date).getTime() - start;
+                        console.log(`Rendered sandbox in ${elapsed/1000}s`);                           
+                        document.title = oldTitle;
+                    } catch (e) {
+                        sandbox.style.backgroundColor = 'rgb(255,200,200)';
+                        console.error(e);
+                        return;
+                    }
+                    sandbox.style.backgroundColor = 'rgb(255,255,255)';
+                }
+            }
+            // Add renderAll button
+            const container = document.createElement('p');
+            const renderAll = document.createElement('button');
+            renderAll.innerHTML = 'Render all';
+            renderAll.style.width="100px";
+            // use async await so they happen in series
+            renderAll.onclick = async function() {
+                for (const b of buttons) {
+                    await b.onclick();
+                }
+            }
+            container.appendChild(renderAll);
+            document.body.appendChild(container);
+            window.onkeydown = function(e) {
+                if (e.key === 'Home') {
+                    renderAll.onclick();
+                }
+            }
+        }
+        window.onload = createCanvasses;
+
+    </script>
+</head>
+</html>
